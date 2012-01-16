@@ -22,23 +22,34 @@ import gnu.trove.map.hash.TObjectIntHashMap;
 import gnu.trove.set.TIntSet;
 
 /**
- * Wrapper for Standard Counts object that permits counts only for the given set
- * of tag bigrams
+ * Wrapper for Counts object that permits counts only for the given set of tag
+ * bigrams
  * 
  * @author Dan Garrette
  */
 public class GrammarConstrainedCounts implements Counts {
     private Counts delegateCounts;
-    protected TIntObjectMap<TIntSet> validTagBigrams;
 
-    public GrammarConstrainedCounts(Counts delegateCounts, TIntObjectMap<TIntSet> validTagBigrams) {
+    protected TIntSet validInitials;
+    protected TIntObjectMap<TIntSet> validTransitions;
+    protected TIntSet validFinals;
+
+    public GrammarConstrainedCounts(Counts delegateCounts, TIntSet validInitials,
+            TIntObjectMap<TIntSet> validTransitions, TIntSet validFinals) {
         this.delegateCounts = delegateCounts;
-        this.validTagBigrams = validTagBigrams;
+        this.validInitials = validInitials;
+        this.validTransitions = validTransitions;
+        this.validFinals = validFinals;
+    }
+
+    private boolean validTagBigram(int a, int b) {
+        TIntSet validBs = validTransitions.get(a);
+        return validBs != null && validBs.contains(b);
     }
 
     @Override
     public Counts copy() {
-        return new GrammarConstrainedCounts(delegateCounts.copy(), validTagBigrams);
+        return new GrammarConstrainedCounts(delegateCounts.copy(), validInitials, validTransitions, validFinals);
     }
 
     @Override
@@ -88,32 +99,38 @@ public class GrammarConstrainedCounts implements Counts {
 
     @Override
     public void increment(int t_i, int t_j) {
-        delegateCounts.increment(t_i, t_j);
+        if (validTagBigram(t_i, t_j))
+            delegateCounts.increment(t_i, t_j);
     }
 
     @Override
     public void increment(int t_i, int t_j, double amount) {
-        delegateCounts.increment(t_i, t_j, amount);
+        if (validTagBigram(t_i, t_j))
+            delegateCounts.increment(t_i, t_j, amount);
     }
 
     @Override
     public void incrementInitial(int t_i) {
-        delegateCounts.incrementInitial(t_i);
+        if (validInitials.contains(t_i))
+            delegateCounts.incrementInitial(t_i);
     }
 
     @Override
     public void incrementInitial(int t_i, double amount) {
-        delegateCounts.incrementInitial(t_i, amount);
+        if (validInitials.contains(t_i))
+            delegateCounts.incrementInitial(t_i, amount);
     }
 
     @Override
     public void incrementFinal(int t_i) {
-        delegateCounts.incrementFinal(t_i);
+        if (validFinals.contains(t_i))
+            delegateCounts.incrementFinal(t_i);
     }
 
     @Override
     public void incrementFinal(int t_i, double amount) {
-        delegateCounts.incrementFinal(t_i, amount);
+        if (validFinals.contains(t_i))
+            delegateCounts.incrementFinal(t_i, amount);
     }
 
     @Override
@@ -121,34 +138,66 @@ public class GrammarConstrainedCounts implements Counts {
         delegateCounts.prepare();
     }
 
+    private double[] zeroInvalidInitials(double[] dist) {
+        for (int i = 0; i < dist.length; i++)
+            if (!validInitials.contains(i))
+                dist[i] = 0;
+        return dist;
+    }
+
     @Override
     public double[] getInitialLogDist() {
-        return delegateCounts.getInitialLogDist();
+        return zeroInvalidInitials(delegateCounts.getInitialLogDist());
     }
 
     @Override
     public double[] getInitialLogDist(boolean startWithPrior) {
-        return delegateCounts.getInitialLogDist(startWithPrior);
+        return zeroInvalidInitials(delegateCounts.getInitialLogDist(startWithPrior));
+    }
+
+    private double[] zeroInvalidFinals(double[] dist) {
+        for (int i = 0; i < dist.length; i++)
+            if (!validFinals.contains(i))
+                dist[i] = 0;
+        return dist;
     }
 
     @Override
     public double[] getFinalLogDist() {
-        return delegateCounts.getFinalLogDist();
+        return zeroInvalidFinals(delegateCounts.getFinalLogDist());
     }
 
     @Override
     public double[] getFinalLogDist(boolean startWithPrior) {
-        return delegateCounts.getFinalLogDist(startWithPrior);
+        return zeroInvalidFinals(delegateCounts.getFinalLogDist(startWithPrior));
+    }
+
+    private double[][] zeroInvalidTransitions(double[][] dist) {
+        for (int i = 0; i < dist.length; i++) {
+            TIntSet validJs = validTransitions.get(i);
+            double[] disti = dist[i];
+            if (validJs == null) {
+                for (int j = 0; j < dist.length; j++)
+                    disti[j] = 0;
+            }
+            else {
+                for (int j = 0; j < dist.length; j++) {
+                    if (!validJs.contains(j))
+                        disti[j] = 0;
+                }
+            }
+        }
+        return dist;
     }
 
     @Override
     public double[][] getTransitionLogDist() {
-        return delegateCounts.getTransitionLogDist();
+        return zeroInvalidTransitions(delegateCounts.getTransitionLogDist());
     }
 
     @Override
     public double[][] getTransitionLogDist(boolean startWithPrior) {
-        return delegateCounts.getTransitionLogDist(startWithPrior);
+        return zeroInvalidTransitions(delegateCounts.getTransitionLogDist(startWithPrior));
     }
 
     @Override
@@ -172,4 +221,3 @@ public class GrammarConstrainedCounts implements Counts {
     }
 
 }
-

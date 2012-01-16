@@ -28,7 +28,6 @@ import gnu.trove.set.hash.TIntHashSet;
 import java.io.BufferedReader;
 import java.io.EOFException;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -42,6 +41,7 @@ import texnlp.io.DataReader;
 import texnlp.util.IntDoublePair;
 import texnlp.util.MathUtil;
 import texnlp.util.TaggerOptions;
+import texnlp.util.Tuple3;
 
 /**
  * A Hidden Markov Model, trained on tagged and untagged sentences. Constructs a
@@ -337,9 +337,12 @@ public class HMM extends MarkovModel {
             Counts cTotal;
 
             if (!tagBigramFile.equals("")) {
-                TIntObjectMap<TIntSet> validTagBigrams = makeTagBigramMap();
-                cEmpty = new GrammarConstrainedCounts(cEmpty, validTagBigrams);
-                cOrig = new GrammarConstrainedCounts(cOrig, validTagBigrams);
+                Tuple3<TIntSet, TIntObjectMap<TIntSet>, TIntSet> transitionConstraints = getTransitionConstraints();
+                TIntSet validInitialTags = transitionConstraints.getA();
+                TIntObjectMap<TIntSet> validTransitions = transitionConstraints.getB();
+                TIntSet validFinalTags = transitionConstraints.getC();
+                cEmpty = new GrammarConstrainedCounts(cEmpty, validInitialTags, validTransitions, validFinalTags);
+                cOrig = new GrammarConstrainedCounts(cOrig, validInitialTags, validTransitions, validFinalTags);
             }
 
             if (tagdictTraining) {
@@ -840,33 +843,50 @@ public class HMM extends MarkovModel {
         return logForwardProb;
     }
 
-    private TIntObjectMap<TIntSet> makeTagBigramMap() {
+    private Tuple3<TIntSet, TIntObjectMap<TIntSet>, TIntSet> getTransitionConstraints() {
         try {
-            TIntObjectMap<TIntSet> validTagBigrams = new TIntObjectHashMap<TIntSet>();
+            TIntSet validInitialTags = new TIntHashSet();
+            TIntObjectMap<TIntSet> validTransitions = new TIntObjectHashMap<TIntSet>();
+            TIntSet validFinalTags = new TIntHashSet();
             BufferedReader in = null;
             try {
                 in = new BufferedReader(new FileReader(tagBigramFile));
                 String line;
                 while ((line = in.readLine()) != null) {
-                    String[] parts = line.split("\t");
-                    if (parts.length != 2)
-                        throw new RuntimeException();
-                    int bigramStart = states.get(parts[0]);
-                    int bigramEnd = states.get(parts[1]);
-                    if (!validTagBigrams.containsKey(bigramStart))
-                        validTagBigrams.put(bigramStart, new TIntHashSet());
-                    validTagBigrams.get(bigramStart).add(bigramEnd);
+                    int firstTab = line.indexOf('\t');
+                    int secondTab = line.substring(firstTab + 1).indexOf('\t');
+                    if (firstTab == -1 || secondTab != -1)
+                        throw new RuntimeException("Tag bigram file has invalid line: [" + line
+                                + "]. Lines must have exactly one tab.");
+                    String bigramStart = line.substring(0, firstTab);
+                    String bigramEnd = line.substring(firstTab + 1);
+                    if (bigramStart.equals(""))
+                        validInitialTags.add(states.get(bigramEnd));
+                    else if (bigramEnd.equals(""))
+                        validFinalTags.add(states.get(bigramStart));
+                    else {
+                        int bigramStartState = states.get(bigramStart);
+                        if (!validTransitions.containsKey(bigramStartState))
+                            validTransitions.put(bigramStartState, new TIntHashSet());
+                        validTransitions.get(bigramStartState).add(states.get(bigramEnd));
+                    }
                 }
+                if (validInitialTags.isEmpty())
+                    throw new RuntimeException("Grammar contains no initial tags.  Please ensure that the tag "
+                            + "bigram file contains at least one line where the tab is preceded by nothing.");
+                if (validFinalTags.isEmpty())
+                    throw new RuntimeException("Grammar contains no final tags.  Please ensure that the tag "
+                            + "bigram file contains at least one line where the tab is preceded by nothing.");
             }
             finally {
                 if (in != null)
                     in.close();
             }
-            return validTagBigrams;
+            return new Tuple3<TIntSet, TIntObjectMap<TIntSet>, TIntSet>(validInitialTags, validTransitions,
+                    validFinalTags);
         }
         catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
-
 }
