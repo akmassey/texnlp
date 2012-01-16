@@ -19,11 +19,17 @@ package texnlp.taggers;
 
 import gnu.trove.iterator.TObjectIntIterator;
 import gnu.trove.list.linked.TLinkedList;
+import gnu.trove.map.TIntObjectMap;
+import gnu.trove.map.hash.TIntObjectHashMap;
 import gnu.trove.map.hash.TObjectIntHashMap;
 import gnu.trove.set.TIntSet;
+import gnu.trove.set.hash.TIntHashSet;
 
+import java.io.BufferedReader;
 import java.io.EOFException;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -49,6 +55,7 @@ public class HMM extends MarkovModel {
 
     private int numIterations;
     protected String taggedFile;
+    protected String tagBigramFile;
     protected String machineFile;
     protected String rawFile;
     protected String devFile;
@@ -82,6 +89,7 @@ public class HMM extends MarkovModel {
         super(taggerOptions);
         numIterations = taggerOptions.getNumIterations();
         taggedFile = taggerOptions.getTaggedFile();
+        tagBigramFile = taggerOptions.getTagBigramFile();
         machineFile = taggerOptions.getMachineFile();
         rawFile = taggerOptions.getRawFile();
         devFile = taggerOptions.getDevFile();
@@ -324,9 +332,15 @@ public class HMM extends MarkovModel {
                 scanFile(new File(machineFile));
 
             // now do the actual counts
-            StandardCounts cEmpty = new StandardCounts(numStates, tagdictTraining, dirichletTransition, dirichletEmission);
-            StandardCounts cOrig = new StandardCounts(numStates, tagdictTraining, dirichletTransition, dirichletEmission);
-            StandardCounts cTotal;
+            Counts cEmpty = new StandardCounts(numStates, tagdictTraining, dirichletTransition, dirichletEmission);
+            Counts cOrig = new StandardCounts(numStates, tagdictTraining, dirichletTransition, dirichletEmission);
+            Counts cTotal;
+
+            if (!tagBigramFile.equals("")) {
+                TIntObjectMap<TIntSet> validTagBigrams = makeTagBigramMap();
+                cEmpty = new GrammarConstrainedCounts(cEmpty, validTagBigrams);
+                cOrig = new GrammarConstrainedCounts(cOrig, validTagBigrams);
+            }
 
             if (tagdictTraining) {
                 // Do semi-supervised training vith a tag dictionary,
@@ -355,7 +369,7 @@ public class HMM extends MarkovModel {
                 for (int i = 0; i < numStates; i++) {
                     cOrig.incrementInitial(i, 1.0 / (double) numStates);
                     cOrig.incrementFinal(i, 1.0 / (double) numStates);
-                    final double amount = cOrig.c_t[i] / (double) numStates;
+                    final double amount = cOrig.get_c_t(i) / (double) numStates;
                     for (int j = 0; j < numStates; j++) {
                         cOrig.increment(i, j, amount);
                     }
@@ -461,11 +475,11 @@ public class HMM extends MarkovModel {
 
     }
 
-    private void addToCounts(File file, StandardCounts c) throws IOException {
+    private void addToCounts(File file, Counts c) throws IOException {
         addToCounts(file, c, 1.0);
     }
 
-    private void addToCounts(File file, StandardCounts c, double amount) throws IOException {
+    private void addToCounts(File file, Counts c, double amount) throws IOException {
         DataReader inputReader = getDataReader(file);
 
         try {
@@ -557,7 +571,7 @@ public class HMM extends MarkovModel {
     // Train with the forward-backward algorithm. For each iteration,
     // runs each sentence (sequence) separately, collating the results
     // over all sequences. See Rabiner tutorial for details.
-    public void forwardBackward(StandardCounts c, StandardCounts cEmpty) {
+    public void forwardBackward(Counts c, Counts cEmpty) {
         LOG.info("\tRunning forward-backward...");
 
         try {
@@ -633,7 +647,7 @@ public class HMM extends MarkovModel {
             for (int iter = 0; iter < numIterations; iter++) {
 
                 // Counts cnew = c.copy();
-                StandardCounts cnew = cEmpty.copy();
+                Counts cnew = cEmpty.copy();
 
                 double totalProbForK = 0.0;
                 for (int itemID = 0; itemID < numSequences; itemID++) {
@@ -699,7 +713,7 @@ public class HMM extends MarkovModel {
         }
     }
 
-    private double emForSequence(String[] tokens, StandardCounts cnew, int[][] possibleTags, double[][] pWGT) {
+    private double emForSequence(String[] tokens, Counts cnew, int[][] possibleTags, double[][] pWGT) {
 
         final int numTokens = tokens.length;
 
@@ -824,6 +838,35 @@ public class HMM extends MarkovModel {
         // LOG.debug("\tPerplexity per word: " + perplexity);
 
         return logForwardProb;
+    }
+
+    private TIntObjectMap<TIntSet> makeTagBigramMap() {
+        try {
+            TIntObjectMap<TIntSet> validTagBigrams = new TIntObjectHashMap<TIntSet>();
+            BufferedReader in = null;
+            try {
+                in = new BufferedReader(new FileReader(tagBigramFile));
+                String line;
+                while ((line = in.readLine()) != null) {
+                    String[] parts = line.split("\t");
+                    if (parts.length != 2)
+                        throw new RuntimeException();
+                    int bigramStart = states.get(parts[0]);
+                    int bigramEnd = states.get(parts[1]);
+                    if (!validTagBigrams.containsKey(bigramStart))
+                        validTagBigrams.put(bigramStart, new TIntHashSet());
+                    validTagBigrams.get(bigramStart).add(bigramEnd);
+                }
+            }
+            finally {
+                if (in != null)
+                    in.close();
+            }
+            return validTagBigrams;
+        }
+        catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
 }

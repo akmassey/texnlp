@@ -40,6 +40,7 @@ public class TaggerOptions {
     private String modelType = "HMM";
     private String format = "pipe";
     private String taggedFile = "";
+    private String tagBigramFile = "";
     private String rawFile = "";
     private String devFile = "";
     private String evalFile = "";
@@ -131,8 +132,8 @@ public class TaggerOptions {
                 setContextGen(value);
                 break;
             case 'z':
-            	setTolerance(Double.parseDouble(value));
-            	break;
+                setTolerance(Double.parseDouble(value));
+                break;
             }
         }
 
@@ -140,7 +141,7 @@ public class TaggerOptions {
             createOutputDir();
     }
 
-	public void createOutputDir() throws IOException {
+    public void createOutputDir() throws IOException {
         if (outputDir == null) {
             outputDir = File.createTempFile("tag", null);
             // This removes the created file so we can recreate it as a
@@ -262,18 +263,22 @@ public class TaggerOptions {
     }
 
     public double getTolerance() {
-		return tolerance;
-	}
+        return tolerance;
+    }
 
     public int getValidTagsForUnknownsMinCount() {
         return validTagsForUnknownsMinCount;
     }
 
-	public int getMaxValidTagsForUnknows() {
-		return maxValidTagsForUnknows;
-	}
+    public int getMaxValidTagsForUnknows() {
+        return maxValidTagsForUnknows;
+    }
 
-	public void setNumIterations(int numIterations) {
+    public String getTagBigramFile() {
+        return tagBigramFile;
+    }
+
+    public void setNumIterations(int numIterations) {
         this.numIterations = numIterations;
     }
 
@@ -355,16 +360,20 @@ public class TaggerOptions {
         this.lambda = lambda;
     }
 
-	public void setTolerance(double tolerance) {
-		this.tolerance = tolerance;
-	}
+    public void setTolerance(double tolerance) {
+        this.tolerance = tolerance;
+    }
 
     public void setValidTagsForUnknownsMinCount(int validTagsForUnknownsMinCount) {
         this.validTagsForUnknownsMinCount = validTagsForUnknownsMinCount;
     }
 
-	public void setMaxValidTagsForUnknows(int maxValidTagsForUnknows) {
-		this.maxValidTagsForUnknows = maxValidTagsForUnknows;
-	}
+    public void setMaxValidTagsForUnknows(int maxValidTagsForUnknows) {
+        this.maxValidTagsForUnknows = maxValidTagsForUnknows;
+    }
+
+    public void setTagBigramFile(String tagBigramFile) {
+        this.tagBigramFile = tagBigramFile;
+    }
 
 }

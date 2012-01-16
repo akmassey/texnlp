@@ -34,7 +34,7 @@ import texnlp.util.MathUtil;
  * @author Jason Baldridge
  * @version $Revision: 1.53 $, $Date: 2006/10/12 21:20:44 $
  */
-public class StandardCounts {
+public class StandardCounts implements Counts {
     protected boolean useTransitionPrior = false;
 
     protected int numTags;
@@ -93,11 +93,13 @@ public class StandardCounts {
 
     }
 
-    public StandardCounts copy() {
+    @Override
+    public Counts copy() {
         // return new Counts(numTags, tagdictTraining, useDirichletTransition,
         // useDirichletEmission);
 
-        StandardCounts ccopy = new StandardCounts(numTags, tagdictTraining, useDirichletTransition, useDirichletEmission);
+        StandardCounts ccopy = new StandardCounts(numTags, tagdictTraining, useDirichletTransition,
+                useDirichletEmission);
 
         // ccopy.c_w = c_w = new TObjectDoubleHashMap<String>();
         ccopy.c_w = clone(c_w);
@@ -138,68 +140,84 @@ public class StandardCounts {
         return out;
     }
 
+    @Override
     public final void increment(String w) {
         c_w.adjustOrPutValue(w, 1.0, 1.0);
         seenWords.add(w);
     }
 
+    @Override
     public final void addToSeenWords(String w) {
         seenWords.add(w);
     }
 
+    @Override
     public final void increment(String w, double amount) {
         c_w.adjustOrPutValue(w, amount, amount);
         seenWords.add(w);
     }
 
+    @Override
     public final void increment(int t_i, String w) {
         increment(t_i, w, 1.0);
     }
 
+    @Override
     public double probTagGivenWord(int t_i, String w) {
         return c_tw[t_i].get(w) / c_w.get(w);
     }
 
+    @Override
     public final void increment(int t_i, String w, double amount) {
         c_tw[t_i].adjustOrPutValue(w, amount, amount);
     }
 
+    @Override
     public final int getNumEmissions(int t_i) {
         return c_tw[t_i].size();
     }
 
+    @Override
     public final void increment(int t_i) {
         c_t[t_i] += 1.0;
     }
 
+    @Override
     public final void increment(int t_i, double amount) {
         c_t[t_i] += amount;
     }
 
+    @Override
     public final void increment(int t_i, int t_j) {
         increment(t_i, t_j, 1.0);
     }
 
+    @Override
     public final void increment(int t_i, int t_j, double amount) {
         c_tt[t_i][t_j] += amount;
     }
 
+    @Override
     public final void incrementInitial(int t_i) {
         c_tInitial[t_i] += 1.0;
     }
 
+    @Override
     public final void incrementInitial(int t_i, double amount) {
         c_tInitial[t_i] += amount;
     }
 
+    @Override
     public final void incrementFinal(int t_i) {
         c_tFinal[t_i] += 1.0;
     }
 
+    @Override
     public final void incrementFinal(int t_i, double amount) {
         c_tFinal[t_i] += amount;
     }
 
+    @Override
     public void prepare() {
 
         int[] mult_tt = new int[numTags];
@@ -255,10 +273,12 @@ public class StandardCounts {
 
     }
 
+    @Override
     public final double[] getInitialLogDist() {
         return getInitialLogDist(false);
     }
 
+    @Override
     public final double[] getInitialLogDist(boolean startWithPrior) {
         double[] real_c_t = new double[numTags];
         for (int i = 0; i < numTags; i++)
@@ -292,10 +312,12 @@ public class StandardCounts {
         return probs;
     }
 
+    @Override
     public final double[] getFinalLogDist() {
         return getFinalLogDist(false);
     }
 
+    @Override
     public final double[] getFinalLogDist(boolean startWithPrior) {
         double[] real_c_t = new double[numTags];
         for (int i = 0; i < numTags; i++)
@@ -328,10 +350,12 @@ public class StandardCounts {
         return probs;
     }
 
+    @Override
     public final double[][] getTransitionLogDist() {
         return getTransitionLogDist(false);
     }
 
+    @Override
     public final double[][] getTransitionLogDist(boolean startWithPrior) {
         double[][] probs = new double[numTags][numTags];
 
@@ -378,10 +402,12 @@ public class StandardCounts {
         return probs;
     }
 
+    @Override
     public final EmissionProbs getEmissionLogDist() {
         return getEmissionLogDist(null);
     }
 
+    @Override
     public final EmissionProbs getEmissionLogDist(TIntSet validTagsForUnknowns) {
         TObjectDoubleHashMap<String> unigramSmoothed = new TObjectDoubleHashMap<String>(c_w.size());
         final double numWords = MathUtil.sum(c_w.values());
@@ -471,11 +497,17 @@ public class StandardCounts {
         return probs;
     }
 
+    @Override
     public void createTransitionPrior(String[] stateNames, TObjectIntHashMap<String> states, double amount) {
         useTransitionPrior = true;
 
         tprior = new TransitionPrior(stateNames, states);
 
+    }
+
+    @Override
+    public double get_c_t(int i) {
+        return c_t[i];
     }
 
 }
