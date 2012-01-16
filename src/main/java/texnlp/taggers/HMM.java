@@ -324,9 +324,9 @@ public class HMM extends MarkovModel {
                 scanFile(new File(machineFile));
 
             // now do the actual counts
-            Counts cEmpty = new Counts(numStates, tagdictTraining, dirichletTransition, dirichletEmission);
-            Counts cOrig = new Counts(numStates, tagdictTraining, dirichletTransition, dirichletEmission);
-            Counts cTotal;
+            StandardCounts cEmpty = new StandardCounts(numStates, tagdictTraining, dirichletTransition, dirichletEmission);
+            StandardCounts cOrig = new StandardCounts(numStates, tagdictTraining, dirichletTransition, dirichletEmission);
+            StandardCounts cTotal;
 
             if (tagdictTraining) {
                 // Do semi-supervised training vith a tag dictionary,
@@ -461,11 +461,11 @@ public class HMM extends MarkovModel {
 
     }
 
-    private void addToCounts(File file, Counts c) throws IOException {
+    private void addToCounts(File file, StandardCounts c) throws IOException {
         addToCounts(file, c, 1.0);
     }
 
-    private void addToCounts(File file, Counts c, double amount) throws IOException {
+    private void addToCounts(File file, StandardCounts c, double amount) throws IOException {
         DataReader inputReader = getDataReader(file);
 
         try {
@@ -557,7 +557,7 @@ public class HMM extends MarkovModel {
     // Train with the forward-backward algorithm. For each iteration,
     // runs each sentence (sequence) separately, collating the results
     // over all sequences. See Rabiner tutorial for details.
-    public void forwardBackward(Counts c, Counts cEmpty) {
+    public void forwardBackward(StandardCounts c, StandardCounts cEmpty) {
         LOG.info("\tRunning forward-backward...");
 
         try {
@@ -633,7 +633,7 @@ public class HMM extends MarkovModel {
             for (int iter = 0; iter < numIterations; iter++) {
 
                 // Counts cnew = c.copy();
-                Counts cnew = cEmpty.copy();
+                StandardCounts cnew = cEmpty.copy();
 
                 double totalProbForK = 0.0;
                 for (int itemID = 0; itemID < numSequences; itemID++) {
@@ -699,7 +699,7 @@ public class HMM extends MarkovModel {
         }
     }
 
-    private double emForSequence(String[] tokens, Counts cnew, int[][] possibleTags, double[][] pWGT) {
+    private double emForSequence(String[] tokens, StandardCounts cnew, int[][] possibleTags, double[][] pWGT) {
 
         final int numTokens = tokens.length;
 

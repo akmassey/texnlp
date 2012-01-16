@@ -34,7 +34,7 @@ import texnlp.util.MathUtil;
  * @author Jason Baldridge
  * @version $Revision: 1.53 $, $Date: 2006/10/12 21:20:44 $
  */
-public class Counts {
+public class StandardCounts {
     protected boolean useTransitionPrior = false;
 
     protected int numTags;
@@ -63,7 +63,7 @@ public class Counts {
 
     protected TObjectDoubleHashMap<String>[] c_tw;
 
-    public Counts(int _numTags, boolean tagdictTraining, boolean dirichletTransition, boolean dirichletEmission) {
+    public StandardCounts(int _numTags, boolean tagdictTraining, boolean dirichletTransition, boolean dirichletEmission) {
         this(_numTags);
         this.tagdictTraining = tagdictTraining;
         useDirichletTransition = dirichletTransition;
@@ -76,7 +76,7 @@ public class Counts {
     private static class TWCounter extends TObjectDoubleHashMap<String> {
     };
 
-    public Counts(int _numTags) {
+    public StandardCounts(int _numTags) {
         numTags = _numTags;
         seenWords = new THashSet<String>();
 
@@ -93,11 +93,11 @@ public class Counts {
 
     }
 
-    public Counts copy() {
+    public StandardCounts copy() {
         // return new Counts(numTags, tagdictTraining, useDirichletTransition,
         // useDirichletEmission);
 
-        Counts ccopy = new Counts(numTags, tagdictTraining, useDirichletTransition, useDirichletEmission);
+        StandardCounts ccopy = new StandardCounts(numTags, tagdictTraining, useDirichletTransition, useDirichletEmission);
 
         // ccopy.c_w = c_w = new TObjectDoubleHashMap<String>();
         ccopy.c_w = clone(c_w);
