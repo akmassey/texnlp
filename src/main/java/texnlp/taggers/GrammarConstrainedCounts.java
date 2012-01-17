@@ -17,6 +17,7 @@
 //////////////////////////////////////////////////////////////////////////////
 package texnlp.taggers;
 
+import texnlp.util.MathUtil;
 import gnu.trove.map.TIntObjectMap;
 import gnu.trove.map.hash.TObjectIntHashMap;
 import gnu.trove.set.TIntSet;
@@ -141,7 +142,7 @@ public class GrammarConstrainedCounts implements Counts {
     private double[] zeroInvalidInitials(double[] dist) {
         for (int i = 0; i < dist.length; i++)
             if (!validInitials.contains(i))
-                dist[i] = 0;
+                dist[i] = MathUtil.LOG_ZERO;
         return dist;
     }
 
@@ -158,7 +159,7 @@ public class GrammarConstrainedCounts implements Counts {
     private double[] zeroInvalidFinals(double[] dist) {
         for (int i = 0; i < dist.length; i++)
             if (!validFinals.contains(i))
-                dist[i] = 0;
+                dist[i] = MathUtil.LOG_ZERO;
         return dist;
     }
 
@@ -178,12 +179,12 @@ public class GrammarConstrainedCounts implements Counts {
             double[] disti = dist[i];
             if (validJs == null) {
                 for (int j = 0; j < dist.length; j++)
-                    disti[j] = 0;
+                    disti[j] = MathUtil.LOG_ZERO;
             }
             else {
                 for (int j = 0; j < dist.length; j++) {
                     if (!validJs.contains(j))
-                        disti[j] = 0;
+                        disti[j] = MathUtil.LOG_ZERO;
                 }
             }
         }
