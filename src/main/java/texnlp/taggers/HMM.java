@@ -40,8 +40,8 @@ import org.apache.commons.logging.LogFactory;
 import texnlp.io.DataReader;
 import texnlp.util.IntDoublePair;
 import texnlp.util.MathUtil;
+import texnlp.util.StringUtil;
 import texnlp.util.TaggerOptions;
-import texnlp.util.Tuple3;
 
 /**
  * A Hidden Markov Model, trained on tagged and untagged sentences. Constructs a
@@ -84,6 +84,11 @@ public class HMM extends MarkovModel {
     protected TIntSet validTagsForUnknowns;
     protected int validTagsForUnknownsMinCount;
     protected int maxValidTagsForUnknowns;
+
+    // These comprise the legal grammar used for tagging.
+    protected TIntSet validInitialTags;
+    protected TIntObjectMap<TIntSet> validTransitions;
+    protected TIntSet validFinalTags;
 
     public HMM(TaggerOptions taggerOptions) {
         super(taggerOptions);
@@ -141,8 +146,13 @@ public class HMM extends MarkovModel {
             currentFirst = currentFirst.getNext();
         }
 
-        if (validTags[0].length > 1)
-            validTags[0] = applyBeta(validTags[0], viterbi[0], logBeta + maxFirst);
+        if (validTags[0].length > 1) {
+            int[] filteredJStates = applyBeta(validTags[0], viterbi[0], logBeta + maxFirst);
+            if (filteredJStates.length != 0)
+                validTags[0] = filteredJStates;
+            else
+                validTags[0] = new int[] { topStateByEmissionProb(tokens[0], validTags[0]) };
+        }
 
         for (int tokenID = 1; tokenID < numTokens; tokenID++) {
 
@@ -171,7 +181,7 @@ public class HMM extends MarkovModel {
                     // would be otherwise:
                     // MathUtil.elogProduct(viterbi[tokenID-1][iStateID],pTransition[iStates[i]][stateID],
                     // current.doubleValue);
-                    if (pathLogProb > max) {
+                    if (pathLogProb >= max) {
                         max = pathLogProb;
                         bestPrevState = iStateID;
                     }
@@ -186,7 +196,11 @@ public class HMM extends MarkovModel {
             }
 
             if (jStates.length > 1) {
-                validTags[tokenID] = applyBeta(jStates, viterbi[tokenID], logBeta + maxViterbi);
+                int[] filteredJStates = applyBeta(jStates, viterbi[tokenID], logBeta + maxViterbi);
+                if (filteredJStates.length != 0)
+                    validTags[tokenID] = filteredJStates;
+                else
+                    validTags[tokenID] = new int[] { topStateByEmissionProb(token, jStates) };
             }
             else {
                 validTags[tokenID] = jStates;
@@ -220,7 +234,7 @@ public class HMM extends MarkovModel {
 
                 // LOG.debug(bestTotalProb + "\t" + finalProb);
 
-                if (finalProb > bestTotalProb) {
+                if (finalProb >= bestTotalProb) {
                     bestTotalProb = finalProb;
                     endLabel = stateID;
                 }
@@ -257,18 +271,27 @@ public class HMM extends MarkovModel {
             labels[0] = stateNames[endLabel];
         }
         catch (java.lang.ArrayIndexOutOfBoundsException e) {
-            StringBuilder sb = new StringBuilder("Issue tagging:\n");
-            for (int k = 0; k < tokens.length; k++) {
-                sb.append(tokens[k]);
-                sb.append(" ");
-            }
-            sb.append("\n");
-            throw new RuntimeException(sb.toString(), e);
+            throw new RuntimeException("Issue tagging: " + StringUtil.join(" ", tokens), e);
         }
 
         // LOG.debug(StringUtil.mergeJoin("/", tokens, labels));
 
         return labels;
+    }
+
+    private int topStateByEmissionProb(final String token, int[] jStates) {
+        int maxIndex = -1;
+        double maxProb = MathUtil.LOG_ZERO;
+        IntDoublePair cur = pEmission.get(token).getFirst();
+        for (int j = 0; j < jStates.length; j++) {
+            double emissionLogProb = cur.doubleValue;
+            if (emissionLogProb >= maxProb) {
+                maxIndex = cur.intValue;
+                maxProb = emissionLogProb;
+            }
+            cur = cur.getNext();
+        }
+        return maxIndex;
     }
 
     protected double[][] getTransitionLogProbs(int[] iStates, int[] jStates, int tokenID, String[] tokens) {
@@ -337,10 +360,7 @@ public class HMM extends MarkovModel {
             Counts cTotal;
 
             if (!tagBigramFile.equals("")) {
-                Tuple3<TIntSet, TIntObjectMap<TIntSet>, TIntSet> transitionConstraints = getTransitionConstraints();
-                TIntSet validInitialTags = transitionConstraints.getA();
-                TIntObjectMap<TIntSet> validTransitions = transitionConstraints.getB();
-                TIntSet validFinalTags = transitionConstraints.getC();
+                getTransitionConstraints();
                 cEmpty = new GrammarConstrainedCounts(cEmpty, validInitialTags, validTransitions, validFinalTags);
                 cOrig = new GrammarConstrainedCounts(cOrig, validInitialTags, validTransitions, validFinalTags);
             }
@@ -843,50 +863,62 @@ public class HMM extends MarkovModel {
         return logForwardProb;
     }
 
-    private Tuple3<TIntSet, TIntObjectMap<TIntSet>, TIntSet> getTransitionConstraints() {
-        try {
-            TIntSet validInitialTags = new TIntHashSet();
-            TIntObjectMap<TIntSet> validTransitions = new TIntObjectHashMap<TIntSet>();
-            TIntSet validFinalTags = new TIntHashSet();
-            BufferedReader in = null;
+    private void getTransitionConstraints() {
+        if (!tagBigramFile.equals("")) {
             try {
-                in = new BufferedReader(new FileReader(tagBigramFile));
-                String line;
-                while ((line = in.readLine()) != null) {
-                    int firstTab = line.indexOf('\t');
-                    int secondTab = line.substring(firstTab + 1).indexOf('\t');
-                    if (firstTab == -1 || secondTab != -1)
-                        throw new RuntimeException("Tag bigram file has invalid line: [" + line
-                                + "]. Lines must have exactly one tab.");
-                    String bigramStart = line.substring(0, firstTab);
-                    String bigramEnd = line.substring(firstTab + 1);
-                    if (bigramStart.equals(""))
-                        validInitialTags.add(states.get(bigramEnd));
-                    else if (bigramEnd.equals(""))
-                        validFinalTags.add(states.get(bigramStart));
-                    else {
-                        int bigramStartState = states.get(bigramStart);
-                        if (!validTransitions.containsKey(bigramStartState))
-                            validTransitions.put(bigramStartState, new TIntHashSet());
-                        validTransitions.get(bigramStartState).add(states.get(bigramEnd));
+                BufferedReader in = null;
+                try {
+                    in = new BufferedReader(new FileReader(tagBigramFile));
+
+                    validInitialTags = new TIntHashSet();
+                    validTransitions = new TIntObjectHashMap<TIntSet>();
+                    validFinalTags = new TIntHashSet();
+
+                    boolean initialFound = false;
+                    boolean finalFound = false;
+
+                    String line;
+                    while ((line = in.readLine()) != null) {
+                        int firstTab = line.indexOf('\t');
+                        int secondTab = line.substring(firstTab + 1).indexOf('\t');
+                        if (firstTab == -1 || secondTab != -1)
+                            throw new RuntimeException("Tag bigram file has invalid line: [" + line
+                                    + "]. Lines must have exactly one tab.");
+                        String bigramStart = line.substring(0, firstTab);
+                        String bigramEnd = line.substring(firstTab + 1);
+                        if (bigramStart.equals("")) {
+                            if (states.contains(bigramEnd))
+                                validInitialTags.add(states.get(bigramEnd));
+                            initialFound = true;
+                        }
+                        else if (bigramEnd.equals("")) {
+                            if (states.contains(bigramStart))
+                                validFinalTags.add(states.get(bigramStart));
+                            finalFound = true;
+                        }
+                        else if (states.contains(bigramStart) && states.contains(bigramEnd)) {
+                            int bigramStartState = states.get(bigramStart);
+                            if (!validTransitions.containsKey(bigramStartState))
+                                validTransitions.put(bigramStartState, new TIntHashSet());
+                            validTransitions.get(bigramStartState).add(states.get(bigramEnd));
+                        }
                     }
+
+                    if (!initialFound)
+                        throw new RuntimeException("Grammar contains no initial tags.  Please ensure that the tag "
+                                + "bigram file contains at least one line where the tab is preceded by nothing.");
+                    if (!finalFound)
+                        throw new RuntimeException("Grammar contains no final tags.  Please ensure that the tag "
+                                + "bigram file contains at least one line where the tab is preceded by nothing.");
                 }
-                if (validInitialTags.isEmpty())
-                    throw new RuntimeException("Grammar contains no initial tags.  Please ensure that the tag "
-                            + "bigram file contains at least one line where the tab is preceded by nothing.");
-                if (validFinalTags.isEmpty())
-                    throw new RuntimeException("Grammar contains no final tags.  Please ensure that the tag "
-                            + "bigram file contains at least one line where the tab is preceded by nothing.");
+                finally {
+                    if (in != null)
+                        in.close();
+                }
             }
-            finally {
-                if (in != null)
-                    in.close();
+            catch (IOException e) {
+                throw new RuntimeException(e);
             }
-            return new Tuple3<TIntSet, TIntObjectMap<TIntSet>, TIntSet>(validInitialTags, validTransitions,
-                    validFinalTags);
-        }
-        catch (IOException e) {
-            throw new RuntimeException(e);
         }
     }
 }
