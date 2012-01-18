@@ -682,6 +682,9 @@ public class HMM extends MarkovModel {
                 // LOG.debug("\t"+ iter + ": " + averageLogProb);
                 LOG.info("\t" + iter + ": " + averageLogProb);
 
+                if (averageLogProb == MathUtil.LOG_ZERO)
+                    throw new RuntimeException("Calculated an average probability of zero!");
+
                 // Reset model parameters based on the maximization
                 cnew.prepare();
                 pInitial = cnew.getInitialLogDist();
