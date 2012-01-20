@@ -109,17 +109,18 @@ public class CategoryLexer extends Lexer {
     public final void mBASESTRING() throws RecognitionException {
         try {
             int _type = BASESTRING;
-            // Category.g:104:11: ( ( UPPER | LOWER | '.' | ',' | ':' | ';' | '#' | '$' )+ )
-            // Category.g:104:13: ( UPPER | LOWER | '.' | ',' | ':' | ';'  | '#' | '$')+
+            // Category.g:104:11: ( ( UPPER | LOWER | '.' | ',' | ':' | ';' | '#' | '$' | '-' | '\'' | '`')+ )
+            // Category.g:104:13: ( UPPER | LOWER | '.' | ',' | ':' | ';'  | '#' | '$' | '-' | '\'' | '`')+
             {
-                // Category.g:104:13: ( UPPER | LOWER | '.' | ',' | ':' | ';'  | '#' | '$')+
+                // Category.g:104:13: ( UPPER | LOWER | '.' | ',' | ':' | ';'  | '#' | '$' | '-' | '\'' | '`')+
                 int cnt1 = 0;
                 loop1: do {
                     int alt1 = 2;
                     int LA1_0 = input.LA(1);
 
                     if ((LA1_0 == ',' || LA1_0 == '.' || (LA1_0 >= ':' && LA1_0 <= ';')
-                            || LA1_0 == '#' || LA1_0 == '$'
+                            || LA1_0 == '#' || LA1_0 == '$' 
+                            || LA1_0 == '-' || LA1_0 == '\'' || LA1_0 == '`'
                             || (LA1_0 >= 'A' && LA1_0 <= 'Z') || (LA1_0 >= 'a' && LA1_0 <= 'z'))) {
                         alt1 = 1;
                     }
@@ -129,7 +130,8 @@ public class CategoryLexer extends Lexer {
                     // Category.g:
                     {
                         if (input.LA(1) == ',' || input.LA(1) == '.' || (input.LA(1) >= ':' && input.LA(1) <= ';')
-                                || input.LA(1) == '#' || input.LA(1) == '$'
+                                || input.LA(1) == '#' || input.LA(1) == '$' 
+                                || input.LA(1) == '-' || input.LA(1) == '\'' || input.LA(1) == '`'
                                 || (input.LA(1) >= 'A' && input.LA(1) <= 'Z')
                                 || (input.LA(1) >= 'a' && input.LA(1) <= 'z')) {
                             input.consume();
@@ -250,6 +252,9 @@ public class CategoryLexer extends Lexer {
         case ';':
         case '#':
         case '$':
+        case '-':
+        case '\'':
+        case '`':
         case 'A':
         case 'B':
         case 'C':

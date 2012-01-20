@@ -101,7 +101,7 @@ atom returns [Cat value]
     ;
 
 
-BASESTRING: ( UPPER | LOWER | '.' | ',' | ':' | ';' | '#' | '$')+ ;
+BASESTRING: ( UPPER | LOWER | '.' | ',' | ':' | ';' | '#' | '$' | '-' | '\'' | '`')+ ;
 fragment UPPER: 'A'..'Z';
 fragment LOWER: 'a'..'z';
 SLASH: '\\' | '/' ;
