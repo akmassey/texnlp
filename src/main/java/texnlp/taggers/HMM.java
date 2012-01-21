@@ -150,8 +150,6 @@ public class HMM extends MarkovModel {
             int[] filteredJStates = applyBeta(validTags[0], viterbi[0], logBeta + maxFirst);
             if (filteredJStates.length != 0)
                 validTags[0] = filteredJStates;
-            else
-                validTags[0] = new int[] { topStateByEmissionProb(tokens[0], validTags[0]) };
         }
 
         for (int tokenID = 1; tokenID < numTokens; tokenID++) {
@@ -199,8 +197,6 @@ public class HMM extends MarkovModel {
                 int[] filteredJStates = applyBeta(jStates, viterbi[tokenID], logBeta + maxViterbi);
                 if (filteredJStates.length != 0)
                     validTags[tokenID] = filteredJStates;
-                else
-                    validTags[tokenID] = new int[] { topStateByEmissionProb(token, jStates) };
             }
             else {
                 validTags[tokenID] = jStates;
@@ -277,21 +273,6 @@ public class HMM extends MarkovModel {
         // LOG.debug(StringUtil.mergeJoin("/", tokens, labels));
 
         return labels;
-    }
-
-    private int topStateByEmissionProb(final String token, int[] jStates) {
-        int maxIndex = -1;
-        double maxProb = MathUtil.LOG_ZERO;
-        IntDoublePair cur = pEmission.get(token).getFirst();
-        for (int j = 0; j < jStates.length; j++) {
-            double emissionLogProb = cur.doubleValue;
-            if (emissionLogProb >= maxProb) {
-                maxIndex = cur.intValue;
-                maxProb = emissionLogProb;
-            }
-            cur = cur.getNext();
-        }
-        return maxIndex;
     }
 
     protected double[][] getTransitionLogProbs(int[] iStates, int[] jStates, int tokenID, String[] tokens) {
