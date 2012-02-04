@@ -324,9 +324,7 @@ public class HMM extends MarkovModel {
     }
 
     public void train() {
-
         try {
-
             File taggedEvents = new File(taggedFile);
 
             // Set things up
@@ -338,7 +336,6 @@ public class HMM extends MarkovModel {
             // now do the actual counts
             Counts cEmpty = new StandardCounts(numStates, tagdictTraining, dirichletTransition, dirichletEmission);
             Counts cOrig = new StandardCounts(numStates, tagdictTraining, dirichletTransition, dirichletEmission);
-            Counts cTotal;
 
             if (!tagBigramFile.equals("")) {
                 getTransitionConstraints();
@@ -346,106 +343,11 @@ public class HMM extends MarkovModel {
                 cOrig = new GrammarConstrainedCounts(cOrig, validInitialTags, validTransitions, validFinalTags);
             }
 
-            if (tagdictTraining) {
-                // Do semi-supervised training vith a tag dictionary,
-                // possibly using frequencies from the tag dictionary
-                // to cut out noise (via -c option). See Banko and
-                // Moore 2004.
-
-                tagDictionary.applyThreshold();
-
-                if (validTagsForUnknownsMinCount > 1 || maxValidTagsForUnknowns < numStates)
-                    validTagsForUnknowns = tagDictionary.getRestrictedTagSet(validTagsForUnknownsMinCount,
-                            maxValidTagsForUnknowns, stateNames);
-
-                tagDictionary.finalize(numStates);
-
-                // for (String word: tagDictionary.getWords()) {
-                // int[] tagsForWord = tagDictionary.getTags(word);
-                // final int numTagsForWord = tagsForWord.length;
-                // cOrig.increment(word);
-                // for (int j=0; j<numTagsForWord; j++) {
-                // cOrig.increment(tagsForWord[j], word);
-                // cOrig.increment(tagsForWord[j]);
-                // }
-                // }
-
-                for (int i = 0; i < numStates; i++) {
-                    cOrig.incrementInitial(i, 1.0 / (double) numStates);
-                    cOrig.incrementFinal(i, 1.0 / (double) numStates);
-                    final double amount = cOrig.get_c_t(i) / (double) numStates;
-                    for (int j = 0; j < numStates; j++) {
-                        cOrig.increment(i, j, amount);
-                    }
-                }
-
-                // LOG.debug(StringUtil.join(c.c_t));
-
-                // The next block of code adds pseudo-counts to the
-                // emission counts by looking at each word, and using
-                // as its count for a tag's emission that word's
-                // overall frequency divided by the number of tags for
-                // the word in the tag dictionary.
-                DataReader rawinputReader = getDataReader(new File(rawFile));
-                TObjectIntHashMap<String> wordFreqs = new TObjectIntHashMap<String>();
-                try {
-                    while (true) {
-                        String[] words = rawinputReader.nextOutputSequence();
-                        for (int i = 0; i < words.length; i++) {
-                            wordFreqs.adjustOrPutValue(words[i], 1, 1);
-                        }
-                    }
-                }
-                catch (EOFException e) {
-                    rawinputReader.close();
-                }
-                TObjectIntIterator<String> iterator = wordFreqs.iterator();
-                for (int i = wordFreqs.size(); i-- > 0;) {
-                    iterator.advance();
-                    String word = iterator.key();
-
-                    if (tagDictionary.containsWord(word)) {
-                        final int freqOfWord = iterator.value();
-                        cOrig.increment(word, (double) freqOfWord);
-                        int[] tagsForWord = tagDictionary.getTags(word);
-                        final int numTagsForWord = tagsForWord.length;
-                        double amount = freqOfWord / (double) numTagsForWord;
-                        // double amount = freqOfWord;
-                        for (int j = 0; j < numTagsForWord; j++) {
-                            cOrig.increment(tagsForWord[j], word, amount);
-                            cOrig.increment(tagsForWord[j], amount);
-                        }
-                    }
-                }
-
-                cTotal = cOrig.copy();
-
-            }
-            else {
-                // Do standard supervised training
-                addToCounts(taggedEvents, cOrig);
-
-                // Make a copy of the original counts.
-                // The originals will be used to seed EM
-                cTotal = cOrig.copy();
-
-                if (!machineFile.equals(""))
-                    addToCounts(new File(machineFile), cTotal, lambda);
-
-                if (!rawFile.equals("")) {
-                    DataReader rawinputReader = getDataReader(new File(rawFile));
-                    try {
-                        while (true) {
-                            String[] words = rawinputReader.nextOutputSequence();
-                            for (String word : words)
-                                cOrig.addToSeenWords(word);
-                        }
-                    }
-                    catch (EOFException e) {
-                        rawinputReader.close();
-                    }
-                }
-            }
+            Counts cTotal;
+            if (tagdictTraining)
+                cTotal = tagdictTraining(cOrig);
+            else
+                cTotal = standardTraining(taggedEvents, cOrig);
 
             // Use the CCG priors
             boolean startWithPrior = false;
@@ -471,12 +373,112 @@ public class HMM extends MarkovModel {
             if (numIterations > 0) {
                 forwardBackward(cOrig, cEmpty);
             }
-
         }
         catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
 
+    private Counts tagdictTraining(Counts cOrig) throws IOException {
+        // Do semi-supervised training vith a tag dictionary,
+        // possibly using frequencies from the tag dictionary
+        // to cut out noise (via -c option). See Banko and
+        // Moore 2004.
+
+        tagDictionary.applyThreshold();
+
+        if (validTagsForUnknownsMinCount > 1 || maxValidTagsForUnknowns < numStates)
+            validTagsForUnknowns = tagDictionary.getRestrictedTagSet(validTagsForUnknownsMinCount,
+                    maxValidTagsForUnknowns, stateNames);
+
+        tagDictionary.finalize(numStates);
+
+        // for (String word: tagDictionary.getWords()) {
+        // int[] tagsForWord = tagDictionary.getTags(word);
+        // final int numTagsForWord = tagsForWord.length;
+        // cOrig.increment(word);
+        // for (int j=0; j<numTagsForWord; j++) {
+        // cOrig.increment(tagsForWord[j], word);
+        // cOrig.increment(tagsForWord[j]);
+        // }
+        // }
+
+        for (int i = 0; i < numStates; i++) {
+            cOrig.incrementInitial(i, 1.0 / (double) numStates);
+            cOrig.incrementFinal(i, 1.0 / (double) numStates);
+            final double amount = cOrig.get_c_t(i) / (double) numStates;
+            for (int j = 0; j < numStates; j++) {
+                cOrig.increment(i, j, amount);
+            }
+        }
+
+        // LOG.debug(StringUtil.join(c.c_t));
+
+        // The next block of code adds pseudo-counts to the
+        // emission counts by looking at each word, and using
+        // as its count for a tag's emission that word's
+        // overall frequency divided by the number of tags for
+        // the word in the tag dictionary.
+        DataReader rawinputReader = getDataReader(new File(rawFile));
+        TObjectIntHashMap<String> wordFreqs = new TObjectIntHashMap<String>();
+        try {
+            while (true) {
+                String[] words = rawinputReader.nextOutputSequence();
+                for (int i = 0; i < words.length; i++) {
+                    wordFreqs.adjustOrPutValue(words[i], 1, 1);
+                }
+            }
+        }
+        catch (EOFException e) {
+            rawinputReader.close();
+        }
+        TObjectIntIterator<String> iterator = wordFreqs.iterator();
+        for (int i = wordFreqs.size(); i-- > 0;) {
+            iterator.advance();
+            String word = iterator.key();
+
+            if (tagDictionary.containsWord(word)) {
+                final int freqOfWord = iterator.value();
+                cOrig.increment(word, (double) freqOfWord);
+                int[] tagsForWord = tagDictionary.getTags(word);
+                final int numTagsForWord = tagsForWord.length;
+                double amount = freqOfWord / (double) numTagsForWord;
+                // double amount = freqOfWord;
+                for (int j = 0; j < numTagsForWord; j++) {
+                    cOrig.increment(tagsForWord[j], word, amount);
+                    cOrig.increment(tagsForWord[j], amount);
+                }
+            }
+        }
+
+        return cOrig.copy();
+    }
+
+    private Counts standardTraining(File taggedEvents, Counts cOrig) throws IOException {
+        // Do standard supervised training
+        addToCounts(taggedEvents, cOrig);
+
+        // Make a copy of the original counts.
+        // The originals will be used to seed EM
+        Counts cTotal = cOrig.copy();
+
+        if (!machineFile.equals(""))
+            addToCounts(new File(machineFile), cTotal, lambda);
+
+        if (!rawFile.equals("")) {
+            DataReader rawinputReader = getDataReader(new File(rawFile));
+            try {
+                while (true) {
+                    String[] words = rawinputReader.nextOutputSequence();
+                    for (String word : words)
+                        cOrig.addToSeenWords(word);
+                }
+            }
+            catch (EOFException e) {
+                rawinputReader.close();
+            }
+        }
+        return cTotal;
     }
 
     private void addToCounts(File file, Counts c) throws IOException {
